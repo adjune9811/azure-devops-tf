@@ -1,0 +1,219 @@
+trigger:
+  branches:
+    include:
+      - main
+
+variables:
+  terraformVersion: '1.9.0'
+  backendRG: 'tfstate-rg'
+  backendSA: 'addstfstatestore123'
+  backendContainer: 'tfstate'
+
+stages:
+
+# ── Validate ─────────────────────────────
+- stage: Validate
+  displayName: 'Validate'
+  jobs:
+  - job: Validate
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: TerraformInstaller@1
+      inputs:
+        terraformVersion: $(terraformVersion)
+
+    - task: TerraformTaskV4@4
+      displayName: 'tf init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        backendServiceArm: 'sc-dev'
+        backendAzureRmResourceGroupName: $(backendRG)
+        backendAzureRmStorageAccountName: $(backendSA)
+        backendAzureRmContainerName: $(backendContainer)
+        backendAzureRmKey: 'dev.terraform.tfstate'
+
+    - task: TerraformTaskV4@4
+      displayName: 'tf validate'
+      inputs:
+        provider: 'azurerm'
+        command: 'validate'
+
+    - script: terraform fmt -check -recursive
+      displayName: 'tf fmt check'
+
+# ── DEV Plan ─────────────────────────────
+- stage: Dev_Plan
+  displayName: 'DEV - Plan'
+  dependsOn: Validate
+  condition: succeeded()
+  variables:
+  - group: terraform-dev
+  jobs:
+  - job: Plan
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: TerraformInstaller@1
+      inputs:
+        terraformVersion: $(terraformVersion)
+
+    - task: TerraformTaskV4@4
+      displayName: 'tf init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        backendServiceArm: 'sc-dev'
+        backendAzureRmResourceGroupName: $(backendRG)
+        backendAzureRmStorageAccountName: $(backendSA)
+        backendAzureRmContainerName: $(backendContainer)
+        backendAzureRmKey: 'dev.terraform.tfstate'
+
+    - task: TerraformTaskV4@4
+      displayName: 'tf plan'
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        environmentServiceNameAzureRM: 'sc-dev'
+        commandOptions: -var-file=envs/dev.tfvars -out=tfplan-dev
+
+    - publish: $(System.DefaultWorkingDirectory)/tfplan-dev
+      artifact: tfplan-dev
+
+# ── DEV Deploy ───────────────────────────
+- stage: Dev_Deploy
+  displayName: 'DEV - Deploy'
+  dependsOn: Dev_Plan
+  condition: succeeded()
+  variables:
+  - group: terraform-dev
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: 'ubuntu-latest'
+    environment: 'dev'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - task: TerraformTaskV4@4
+            displayName: 'tf init'
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              backendServiceArm: 'sc-dev'
+              backendAzureRmResourceGroupName: $(backendRG)
+              backendAzureRmStorageAccountName: $(backendSA)
+              backendAzureRmContainerName: $(backendContainer)
+              backendAzureRmKey: 'dev.terraform.tfstate'
+
+          - download: current
+            artifact: tfplan-dev
+
+          - task: TerraformTaskV4@4
+            displayName: 'tf apply'
+            inputs:
+              provider: 'azurerm'
+              command: 'apply'
+              environmentServiceNameAzureRM: 'sc-dev'
+              commandOptions: $(Pipeline.Workspace)/tfplan-dev/tfplan-dev
+
+# ── PROD Plan ────────────────────────────
+- stage: Prod_Plan
+  displayName: 'PROD - Plan'
+  dependsOn: Dev_Deploy        # runs after dev succeeds
+  condition: succeeded()
+  variables:
+  - group: terraform-prod
+  jobs:
+  - job: Plan
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: TerraformInstaller@1
+      inputs:
+        terraformVersion: $(terraformVersion)
+
+    - task: TerraformTaskV4@4
+      displayName: 'tf init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        backendServiceArm: 'sc-prod'
+        backendAzureRmResourceGroupName: $(backendRG)
+        backendAzureRmStorageAccountName: $(backendSA)
+        backendAzureRmContainerName: $(backendContainer)
+        backendAzureRmKey: 'prod.terraform.tfstate'
+
+    - task: TerraformTaskV4@4
+      displayName: 'tf plan'
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        environmentServiceNameAzureRM: 'sc-prod'
+        commandOptions: -var-file=envs/prod.tfvars -out=tfplan-prod
+
+    - publish: $(System.DefaultWorkingDirectory)/tfplan-prod
+      artifact: tfplan-prod
+
+# ── PROD Approval ────────────────────────
+- stage: Prod_Approval
+  displayName: 'PROD - Approval'
+  dependsOn: Prod_Plan
+  condition: succeeded()
+  jobs:
+  - job: Approval
+    pool: server
+    timeoutInMinutes: 1440
+    steps:
+    - task: ManualValidation@0
+      inputs:
+        notifyUsers: 'your-email@company.com'
+        instructions: 'Review PROD plan artifact and approve to deploy'
+
+# ── PROD Deploy ──────────────────────────
+- stage: Prod_Deploy
+  displayName: 'PROD - Deploy'
+  dependsOn: Prod_Approval
+  condition: succeeded()
+  variables:
+  - group: terraform-prod
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: 'ubuntu-latest'
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: $(terraformVersion)
+
+          - task: TerraformTaskV4@4
+            displayName: 'tf init'
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              backendServiceArm: 'sc-prod'
+              backendAzureRmResourceGroupName: $(backendRG)
+              backendAzureRmStorageAccountName: $(backendSA)
+              backendAzureRmContainerName: $(backendContainer)
+              backendAzureRmKey: 'prod.terraform.tfstate'
+
+          - download: current
+            artifact: tfplan-prod
+
+          - task: TerraformTaskV4@4
+            displayName: 'tf apply'
+            inputs:
+              provider: 'azurerm'
+              command: 'apply'
+              environmentServiceNameAzureRM: 'sc-prod'
+              commandOptions: $(Pipeline.Workspace)/tfplan-prod/tfplan-prod

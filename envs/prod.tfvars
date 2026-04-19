@@ -1,0 +1,5 @@
+resource_group_name  = "myapp-prod-rg"
+storage_account_name = "myappprodstore001"
+location             = "East US"
+environment          = "prod"
+sku_tier             = "RAGRS"
