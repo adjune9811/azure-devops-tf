@@ -53,7 +53,7 @@ stages:
   jobs:
   - job: Plan
     pool:
-      vmImage: 'ubuntu-latest'
+      vmImage: 'my-agent'
     steps:
     - task: TerraformInstaller@1
       inputs:
@@ -91,7 +91,7 @@ stages:
   jobs:
   - deployment: Deploy
     pool:
-      vmImage: 'ubuntu-latest'
+      vmImage: 'my-agent'
     environment: 'dev'
     strategy:
       runOnce:
@@ -133,7 +133,7 @@ stages:
   jobs:
   - job: Plan
     pool:
-      vmImage: 'ubuntu-latest'
+      vmImage: 'my-agent'
     steps:
     - task: TerraformInstaller@1
       inputs:
@@ -186,7 +186,7 @@ stages:
   jobs:
   - deployment: Deploy
     pool:
-      vmImage: 'ubuntu-latest'
+      vmImage: 'my-agent'
     environment: 'production'
     strategy:
       runOnce:
