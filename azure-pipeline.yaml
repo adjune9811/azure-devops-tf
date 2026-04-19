@@ -17,7 +17,7 @@ stages:
   jobs:
   - job: Validate
     pool:
-      vmImage: 'my-agent'
+      vmImage: 'Default'
     steps:
     - task: TerraformInstaller@1
       inputs:
@@ -53,7 +53,7 @@ stages:
   jobs:
   - job: Plan
     pool:
-      vmImage: 'my-agent'
+      vmImage: 'Default'
     steps:
     - task: TerraformInstaller@1
       inputs:
@@ -91,7 +91,7 @@ stages:
   jobs:
   - deployment: Deploy
     pool:
-      vmImage: 'my-agent'
+      vmImage: 'Default'
     environment: 'dev'
     strategy:
       runOnce:
@@ -133,7 +133,7 @@ stages:
   jobs:
   - job: Plan
     pool:
-      vmImage: 'my-agent'
+      vmImage: 'Default'
     steps:
     - task: TerraformInstaller@1
       inputs:
@@ -186,7 +186,7 @@ stages:
   jobs:
   - deployment: Deploy
     pool:
-      vmImage: 'my-agent'
+      vmImage: 'Default'
     environment: 'production'
     strategy:
       runOnce:
