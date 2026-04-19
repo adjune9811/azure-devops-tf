@@ -17,7 +17,7 @@ stages:
   jobs:
   - job: Validate
     pool:
-      vmImage: 'Default'
+      name: Default
     steps:
     - task: TerraformInstaller@1
       inputs:
@@ -53,7 +53,7 @@ stages:
   jobs:
   - job: Plan
     pool:
-      vmImage: 'Default'
+      name: Default
     steps:
     - task: TerraformInstaller@1
       inputs:
@@ -91,7 +91,7 @@ stages:
   jobs:
   - deployment: Deploy
     pool:
-      vmImage: 'Default'
+      name: Default
     environment: 'dev'
     strategy:
       runOnce:
@@ -126,14 +126,14 @@ stages:
 # ── PROD Plan ────────────────────────────
 - stage: Prod_Plan
   displayName: 'PROD - Plan'
-  dependsOn: Dev_Deploy        # runs after dev succeeds
+  dependsOn: Dev_Deploy
   condition: succeeded()
   variables:
   - group: terraform-prod
   jobs:
   - job: Plan
     pool:
-      vmImage: 'Default'
+      name: Default
     steps:
     - task: TerraformInstaller@1
       inputs:
@@ -174,7 +174,7 @@ stages:
     - task: ManualValidation@0
       inputs:
         notifyUsers: 'your-email@company.com'
-        instructions: 'Review PROD plan artifact and approve to deploy'
+        instructions: 'Review PROD plan and approve to deploy'
 
 # ── PROD Deploy ──────────────────────────
 - stage: Prod_Deploy
@@ -186,7 +186,7 @@ stages:
   jobs:
   - deployment: Deploy
     pool:
-      vmImage: 'Default'
+      name: Default
     environment: 'production'
     strategy:
       runOnce:
